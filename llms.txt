@@ -1,0 +1,56 @@
+# agentic-obsidian
+
+> One-click deployment of headless Obsidian with CLI on remote Linux VMs for AI agents.
+
+## What it does
+
+Deploys Obsidian (the knowledge management app) on a headless Linux VM so that
+AI agents can programmatically read, write, search, and manage an Obsidian vault
+via CLI commands, an HTTP API, or SSH.
+
+## Why it exists
+
+Obsidian CLI (1.12+ Catalyst beta) requires the Obsidian GUI app to be running.
+On headless servers, this requires a virtual framebuffer (Xvfb) and specific
+configuration. This project automates the entire setup.
+
+## Architecture
+
+- Obsidian AppImage extracted to /opt/obsidian/squashfs-root/
+- Xvfb provides a virtual display on :99
+- Obsidian runs headlessly with --no-sandbox --disable-gpu
+- The insider .asar (1.12+) enables the CLI
+- An HTTP API on port 3000 wraps CLI commands as REST endpoints
+- Cron jobs handle heartbeat monitoring and vault backups
+- systemd manages all services
+
+## Access Methods
+
+1. SSH: `ssh vm 'DISPLAY=:99 obsidian <command>'`
+2. HTTP API: `curl https://vm.exe.xyz/read?file=note`
+3. Direct CLI (on the VM): `DISPLAY=:99 obsidian help`
+
+## Installation
+
+Generic Linux: `curl -sSL https://raw.githubusercontent.com/Zpankz/agentic-obsidian/main/install.sh | bash`
+exe.dev: `./exe-install.sh <vm-name>`
+
+## API Endpoints
+
+- GET /health — service status
+- GET /version — Obsidian version
+- GET /vault — vault info
+- GET /files — list files
+- GET /read?file=X — read file content
+- GET /search?q=X — search vault
+- GET /tags — list tags
+- POST /create — create file {name, content}
+- POST /append — append to file {file, content}
+- POST /daily/append — append to daily note {content}
+- POST /command — run arbitrary CLI command {command}
+
+## Requirements
+
+- Linux x86_64
+- Obsidian Catalyst license (for CLI, requires 1.12+ .asar)
+- sudo access for apt and systemd

@@ -1,0 +1,16 @@
+[Unit]
+Description=Obsidian Headless (Xvfb + Obsidian CLI)
+After=network.target
+
+[Service]
+Type=forking
+User=exedev
+Environment=HOME=/home/exedev
+ExecStart=/opt/obsidian/start.sh
+ExecStop=/opt/obsidian/stop.sh
+PIDFile=/tmp/obsidian-headless.pid
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

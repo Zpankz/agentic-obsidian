@@ -1,0 +1,19 @@
+[Unit]
+Description=Obsidian CLI HTTP API Server
+After=obsidian.service
+Requires=obsidian.service
+
+[Service]
+Type=simple
+User=exedev
+Environment=DISPLAY=:99
+Environment=HOME=/home/exedev
+Environment=NODE_ENV=production
+Environment=PORT=3000
+WorkingDirectory=/opt/obsidian/api
+ExecStart=/usr/bin/node /opt/obsidian/api/server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
