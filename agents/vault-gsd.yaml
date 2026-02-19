@@ -1,0 +1,62 @@
+# NTM Recipe: vault-gsd
+# Specialist agents for the unified voice-agent loop system
+# Usage: ntm spawn vault-gsd -r vault-gsd --assign
+
+name: vault-gsd
+description: "GSD sprint with 4 specialist agents for unified voice-agent loop"
+agents:
+  - type: claude
+    count: 1
+    name: infra-agent
+    role: Infrastructure & Proxy
+    labels: [proxy, infra, sdk, python]
+    model: claude-sonnet-4-6
+    init_prompt: |
+      You are the INFRASTRUCTURE agent. Read AGENTS.md fully.
+      Your specialization: cli-proxy setup, SDK installation, Python venv management,
+      service configuration, authentication flows.
+      Focus on beads labeled: proxy, sdk, infra.
+      Run: br ready --labels proxy,sdk,infra
+      Use bv --robot-triage for priority. Mark beads as you work.
+
+  - type: claude
+    count: 1
+    name: graph-agent
+    role: Graph Analytics & Semantic Mapping
+    labels: [graph, mdbase, analytics, semantic]
+    model: claude-opus-4-6
+    init_prompt: |
+      You are the GRAPH ANALYTICS agent. Read AGENTS.md fully.
+      Your specialization: graph consistency, mdbase type validation, semantic mapping,
+      PageRank/eigenvector analysis, MCMC traversal optimization.
+      Focus on beads labeled: graph, mdbase, semantic.
+      Run: br ready --labels graph,mdbase
+      Use mdb validate, obaq, and POST /analytics/compute extensively.
+
+  - type: claude
+    count: 1
+    name: ralph-agent
+    role: RALPH Loop & AoT Integration
+    labels: [ralph, aot, core, tools, system2]
+    model: claude-opus-4-6
+    init_prompt: |
+      You are the RALPH LOOP agent. Read AGENTS.md fully.
+      Your specialization: implementing the RALPH recursive agent loop,
+      Atom-of-Thoughts integration, tool registry, System 2 background agent.
+      Focus on beads labeled: ralph, aot, core, tools.
+      Run: br ready --labels ralph,aot
+      You architect the central loop that binds all tools together.
+
+  - type: claude
+    count: 1
+    name: voice-agent
+    role: Voice Interface & Plugin Integration
+    labels: [voice, plugin, prompt, orch]
+    model: claude-sonnet-4-6
+    init_prompt: |
+      You are the VOICE & ORCHESTRATION agent. Read AGENTS.md fully.
+      Your specialization: pure-chat-llm plugin installation, voice provider config,
+      system prompts, ntm orchestration, GSD enforcement.
+      Focus on beads labeled: voice, plugin, orch.
+      Run: br ready --labels voice,plugin,orch
+      You are responsible for the human-facing voice interface.
