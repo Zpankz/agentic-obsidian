@@ -1,6 +1,8 @@
 const http = require("http");
 const { execSync } = require("child_process");
 const url = require("url");
+const fs = require("fs");
+const path = require("path");
 
 const PORT = process.env.PORT || 3000;
 const API_TOKEN = process.env.API_TOKEN || "";
@@ -633,11 +635,21 @@ const server = http.createServer(async (req, res) => {
     return json(res, 401, { error: "Unauthorized" });
   }
 
+  // Serve dashboard
+  if (req.method === 'GET' && (parsed.pathname === '/dashboard' || parsed.pathname === '/dashboard/')) {
+    const dashPath = '/home/exedev/dashboard/index.html';
+    try {
+      const html = fs.readFileSync(dashPath, 'utf-8');
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      return res.end(html);
+    } catch { return json(res, 500, { error: 'Dashboard not found' }); }
+  }
+
   const handler = routes[routeKey];
   if (!handler) {
     return json(res, 404, {
       error: "Not found",
-      endpoints: Object.keys(routes),
+      endpoints: [...Object.keys(routes), 'GET /dashboard'],
     });
   }
 
