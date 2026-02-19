@@ -404,6 +404,137 @@ const TOOLS = {
     },
   },
 
+  // ── PEX Interview Integration ───────────────────────────────
+  'pex_vertex_resolve': {
+    description: 'Resolve a PEX vertex equation to concrete gkg vault nodes. Returns matching LOs, SAQs with pass rates, and examiner comments. Use during PROBE/DIG/FILL phases.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vertex: { type: 'string', description: 'Vertex name or keywords (e.g. "Fick", "clearance extraction", "Starling capillary")' },
+        include_saq: { type: 'boolean', description: 'Include matching SAQs with pass rates', default: true },
+        max_results: { type: 'number', default: 20 },
+      },
+      required: ['vertex'],
+    },
+    handler: (args) => {
+      const vertex = args.vertex;
+      const maxR = args.max_results || 20;
+      // Search via turbovault for BM25 results
+      const searchResult = runJSON(`curl -s -X POST http://localhost:3200/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"query":"${vertex.replace(/'/g, '')}","limit":${maxR}}}}'`);
+      let tvResults = [];
+      try {
+        const inner = JSON.parse(searchResult?.result?.content?.[0]?.text || '{}');
+        tvResults = inner.data || [];
+      } catch(e) {}
+      
+      // Also get graph context for PageRank-weighted results
+      const graphCtx = runJSON(`python3 ${GRAPH_SCRIPT} ${GKG_VAULT} --summary`, { timeout: 60000 });
+      
+      return {
+        vertex: vertex,
+        turbovault_matches: tvResults.slice(0, maxR).map(r => ({
+          path: r.path || r.name,
+          score: r.score,
+        })),
+        graph_stats: graphCtx?.summary ? {
+          total_nodes: graphCtx.summary.node_count,
+          total_edges: graphCtx.summary.edge_count,
+        } : null,
+      };
+    },
+  },
+
+  'pex_saq_for_vertex': {
+    description: 'Find SAQs related to a PEX vertex, ranked by difficulty (lowest pass rate first). Returns SAQ IDs, pass rates, titles, and examiner comments. Essential for FILL phase model response generation.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vertex_keywords: { type: 'string', description: 'Keywords for the vertex topic' },
+        max_pass_rate: { type: 'number', description: 'Filter to SAQs below this pass rate %', default: 50 },
+        limit: { type: 'number', default: 10 },
+      },
+      required: ['vertex_keywords'],
+    },
+    handler: (args) => {
+      const kw = args.vertex_keywords.replace(/"/g, '\\"');
+      const maxPR = args.max_pass_rate || 50;
+      const limit = args.limit || 10;
+      // Use obaq to query SAQs filtered by pass rate
+      const query = `filters:\n  and:\n    - file.inFolder("SAQ")\n    - note.entityType == "SAQ"\n    - note.passRate < ${maxPR}\nviews:\n  - type: table\n    order:\n      - file.name\n      - note.passRate\n      - note.title\n      - note.college\n    sort:\n      - property: note.passRate\n        direction: ASC`;
+      const tmpFile = '/tmp/pex-saq-query.yaml';
+      fs.writeFileSync(tmpFile, query);
+      const result = run(`obaq -d ${GKG_VAULT} -e '@${tmpFile}' -f json`, { timeout: 60000 });
+      let parsed;
+      try { parsed = JSON.parse(result); } catch(e) { return { error: 'parse_error', raw: result.slice(0, 500) }; }
+      
+      // Filter by keyword match in title
+      const kwLower = kw.toLowerCase().split(/\s+/);
+      const rows = (parsed.rows || []).filter(r => {
+        const title = String(r['note.title'] || '');
+        const titleLower = title.toLowerCase();
+        return kwLower.some(k => titleLower.includes(k));
+      }).slice(0, limit);
+      
+      return {
+        query: kw,
+        max_pass_rate: maxPR,
+        total_matching: rows.length,
+        saqs: rows.map(r => ({
+          pass_rate: r['note.passRate'],
+          title: String(r['note.title'] || '').slice(0, 150),
+          college: String(r['note.college'] || ''),
+        })),
+      };
+    },
+  },
+
+  'pex_session_state': {
+    description: 'Get current PEX Interview session state (scores, gaps, vertex statuses). Returns the session tracker JSON.',
+    inputSchema: { type: 'object', properties: {} },
+    handler: () => {
+      const sessionFile = path.join(PKG_VAULT, 'ops', 'sessions', 'pex-session.json');
+      if (!fs.existsSync(sessionFile)) {
+        return { active: false, message: 'No active PEX session. Run session_tracker.py init first.' };
+      }
+      try {
+        return JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+      } catch(e) {
+        return { error: e.message };
+      }
+    },
+  },
+
+  'pex_session_command': {
+    description: 'Execute a PEX session tracker command (init, score, status, gaps, fill, retest, export).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'Full command args (e.g. "score --vertex Flow=\u0394P/R --level L2 --score 3")' },
+      },
+      required: ['command'],
+    },
+    handler: (args) => {
+      const script = path.join(PKG_VAULT, 'ops', 'skills', 'pex-interview', 'scripts', 'session_tracker.py');
+      return { output: run(`PKG_VAULT=${PKG_VAULT} python3 ${script} ${args.command}`) };
+    },
+  },
+
+  'pex_graph_generate': {
+    description: 'Generate a mermaid knowledge graph from current PEX session state. Types: round, dig, summary, ascii.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['round', 'dig', 'summary', 'ascii'], default: 'round' },
+        vertex: { type: 'string', description: 'Required for dig type' },
+      },
+    },
+    handler: (args) => {
+      const script = path.join(PKG_VAULT, 'ops', 'skills', 'pex-interview', 'scripts', 'graph_generator.py');
+      const vertexArg = args.vertex ? `--vertex "${args.vertex}"` : '';
+      return { mermaid: run(`PKG_VAULT=${PKG_VAULT} python3 ${script} --type ${args.type || 'round'} ${vertexArg}`) };
+    },
+  },
+
   // ── Snapshot Management ───────────────────────────────────
   'snapshot_list': {
     description: 'List all stored graph snapshots with timestamps and stats.',
