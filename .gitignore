@@ -1,0 +1,14 @@
+# Cloned ecosystem repos (reference only, not committed)
+ecosystem/*/
+!ecosystem/ECOSYSTEM_MAP.md
+!ecosystem/atom-of-thoughts/
+
+# Sentry
+.sentry-native/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
