@@ -33,7 +33,9 @@ DISPLAY=:99 obsidian eval code="<javascript>"
 
 ## API Server
 
-The HTTP API runs on port 3000. Endpoints:
+The HTTP API runs on port 3000.
+
+### Core Endpoints
 - `GET /health` — service health check
 - `GET /files` — list vault files
 - `GET /read?file=X` — read a file
@@ -41,6 +43,14 @@ The HTTP API runs on port 3000. Endpoints:
 - `POST /create` — create file (JSON body: `{name, content}`)
 - `POST /append` — append to file (JSON body: `{file, content}`)
 - `POST /command` — run arbitrary CLI command (JSON body: `{command}`)
+
+### Graph Analytics Endpoints
+- `GET /analytics/summary` — graph health: nodes, edges, clusters, orphans, weakest nodes
+- `GET /analytics/graph` — full graph state (all nodes + edges + metadata)
+- `GET /analytics/node?file=X` — single node analytics with neighborhood
+- `POST /analytics/compute` — trigger full metric recomputation (PageRank, centrality, communities, priorities)
+- `POST /traverse` — MCMC traversal: optimal reading order for a query (JSON body: `{query, max_nodes, temperature}`)
+- `GET /read/smart?file=X` — file content + neighborhood analytics + suggested next reads
 
 ## Key Paths
 
