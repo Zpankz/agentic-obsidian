@@ -79,3 +79,59 @@ sudo systemctl restart obsidian      # Restart (picks up new .asar, token, etc.)
 - Sync host must be a bare hostname (e.g., `sync-49.obsidian.md`), never `wss://...`.
 - `heartbeat.md` is updated every 5 minutes via cron.
 - Vault backups run daily at 3am to `/opt/obsidian/backups/`.
+
+## Graph Analytics & MCP Tools
+
+### vault-graph MCP (port 3100)
+HTTP MCP server providing 14 tools for vault graph analytics:
+
+```bash
+# Health check
+curl http://localhost:3100/health
+
+# List tools
+curl -X POST http://localhost:3100/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+**Tools:**
+- `graph_snapshot` — Full graph snapshot (PageRank, hubs, components, orphans)
+- `graph_diff` — Diff between current state and last snapshot
+- `graph_context` — Query-focused context for agent injection
+- `graph_profile` — Markdown vault profile report
+- `bases_query` — Query via .base files (obaq)
+- `bases_eval` — Inline Bases YAML query evaluation
+- `md_tree` — Heading tree analysis (treemd)
+- `md_section` — Section extraction
+- `obsidian_search` / `obsidian_read` / `obsidian_eval` — CLI passthrough
+- `cross_vault_context` — Combined gkg + pkg context
+- `vault_node_detail` — Single node deep analytics
+- `snapshot_list` — List stored snapshots
+
+### TurboVault MCP (port 3200)
+Production Rust MCP server with 44 Obsidian vault tools:
+
+```bash
+curl -X POST http://localhost:3200/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+**Vaults registered:** gkg (default), pkg
+
+### CLI Tools
+- `obaq` — Obsidian Bases query processor (npm)
+- `treemd` — Interactive markdown TUI viewer/extractor (cargo)
+- `turbovault` — Rust MCP server binary (cargo)
+
+### Context Injection
+- `tools/context-inject.sh` — Generate vault graph context for agent prompts
+- `tools/hook-session-orient.sh` — arscontexta hook wrapper
+- Session-orient handler auto-injects graph stats + diff into agent bootstrap
+
+### Services
+```
+sudo systemctl status vault-graph    # Graph analytics MCP (port 3100)
+sudo systemctl status turbovault     # TurboVault MCP (port 3200)
+```
