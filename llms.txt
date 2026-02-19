@@ -14,12 +14,22 @@ Obsidian CLI (1.12+ Catalyst beta) requires the Obsidian GUI app to be running.
 On headless servers, this requires a virtual framebuffer (Xvfb) and specific
 configuration. This project automates the entire setup.
 
+## Two-phase install
+
+1. `install.sh` — Installs the base system: Obsidian 1.11.7 AppImage on Xvfb,
+   systemd services, HTTP API, cron jobs. The config is pre-set with
+   `insider: true` so the auto-updater will fetch the 1.12+ beta on first boot.
+
+2. `agent-setup.sh` — One-shot post-install: authenticates with an Obsidian
+   Catalyst account, waits for the insider .asar to download, stores the account
+   token, and creates/connects an Obsidian Sync remote vault.
+
 ## Architecture
 
 - Obsidian AppImage extracted to /opt/obsidian/squashfs-root/
 - Xvfb provides a virtual display on :99
 - Obsidian runs headlessly with --no-sandbox --disable-gpu
-- The insider .asar (1.12+) enables the CLI
+- The insider .asar (1.12+) enables the CLI (auto-downloaded on first boot)
 - An HTTP API on port 3000 wraps CLI commands as REST endpoints
 - Cron jobs handle heartbeat monitoring and vault backups
 - systemd manages all services
@@ -32,8 +42,25 @@ configuration. This project automates the entire setup.
 
 ## Installation
 
-Generic Linux: `curl -sSL https://raw.githubusercontent.com/Zpankz/agentic-obsidian/main/install.sh | bash`
-exe.dev: `./exe-install.sh <vm-name>`
+Generic Linux:
+  curl -sSL https://raw.githubusercontent.com/Zpankz/agentic-obsidian/main/install.sh | bash
+  ./agent-setup.sh --email you@example.com --password 'pass' --vault-name my-vault
+
+exe.dev:
+  ./exe-install.sh <vm-name>
+
+## agent-setup.sh options
+
+  --email <email>           Obsidian account email
+  --password <password>     Obsidian account password
+  --vault-name <name>       Remote vault name
+  --vault-path <path>       Local vault path
+  --region <region>         Sync region
+  --connect-existing        Connect to existing vault
+  --skip-insider            Skip insider upgrade
+  --skip-sync               Skip sync setup
+  --timeout <seconds>       Max wait for download (default: 60)
+  --json                    Output results as JSON
 
 ## API Endpoints
 
@@ -48,6 +75,14 @@ exe.dev: `./exe-install.sh <vm-name>`
 - POST /append — append to file {file, content}
 - POST /daily/append — append to daily note {content}
 - POST /command — run arbitrary CLI command {command}
+
+## Key technical details
+
+- Cloudflare blocks api.obsidian.md without browser-like User-Agent/Origin headers
+- The insider .asar is signed (RSA-SHA256) and hash-verified (SHA-256) by Obsidian's updater
+- The account token singleton is module-scoped; localStorage changes require app restart
+- Sync host param must be bare hostname (e.g. sync-49.obsidian.md), not wss:// URL
+- The .asar download URL only works through Obsidian's Electron net module, not curl
 
 ## Requirements
 

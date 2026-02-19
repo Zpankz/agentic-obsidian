@@ -127,8 +127,10 @@ elif ls "$CONFIG_DIR"/obsidian-1.*.asar &>/dev/null 2>&1; then
   INSIDER=true
 else
   warn "No insider asar provided — CLI requires Obsidian 1.12+ (Catalyst beta)"
-  warn "Set OBSIDIAN_ASAR_PATH to your local obsidian-1.12.x.asar file"
-  INSIDER=false
+  warn "Set OBSIDIAN_ASAR_PATH or run agent-setup.sh to auto-download via Catalyst account"
+  # Default insider to true so the auto-updater will fetch the beta .asar
+  # on first boot (requires Catalyst license on the account)
+  INSIDER=true
 fi
 
 # Create vault directory
@@ -145,7 +147,7 @@ cat > "$CONFIG_DIR/obsidian.json" << EOF
       "open": true
     }
   },
-  "insider": $INSIDER,
+  "insider": true,
   "cli": true
 }
 EOF

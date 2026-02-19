@@ -20,11 +20,21 @@ The result: any AI agent, cron job, or automation pipeline can use Obsidian as a
 ### Generic Linux (any VM/VPS)
 
 ```bash
-# Set required env vars
-export OBSIDIAN_ASAR_PATH=/path/to/obsidian-1.12.1.asar
+# Set vault path
 export OBSIDIAN_VAULT=/home/user/obsidian-vault
 
-# Install
+# Install base (downloads AppImage, sets up Xvfb, systemd, API)
+curl -sSL https://raw.githubusercontent.com/Zpankz/agentic-obsidian/main/install.sh | bash
+
+# Authenticate, upgrade to insider CLI, and connect sync (one command)
+./agent-setup.sh --email you@example.com --password 'your-password' --vault-name my-vault
+```
+
+Or if you already have the insider `.asar`:
+
+```bash
+export OBSIDIAN_ASAR_PATH=/path/to/obsidian-1.12.x.asar
+export OBSIDIAN_VAULT=/home/user/obsidian-vault
 curl -sSL https://raw.githubusercontent.com/Zpankz/agentic-obsidian/main/install.sh | bash
 ```
 
@@ -38,26 +48,67 @@ cd agentic-obsidian
 
 This creates a new exe.dev VM, installs everything, and configures the HTTP proxy. Your vault is accessible at `https://my-obsidian-vm.exe.xyz/`.
 
+## Agent Setup (one-shot CLI + Sync)
+
+After `install.sh`, the base Obsidian 1.11.7 is running but the CLI doesn't work yet (requires 1.12+ insider build). `agent-setup.sh` automates everything in one command:
+
+```bash
+# Full setup: authenticate, upgrade to 1.12+, create & connect sync vault
+./agent-setup.sh --email you@example.com --password 'your-password' --vault-name my-vault
+
+# Connect to an existing remote vault instead of creating a new one
+./agent-setup.sh --email you@example.com --password 'your-password' \
+  --vault-name my-vault --connect-existing
+
+# Just upgrade to insider, skip sync
+./agent-setup.sh --email you@example.com --password 'your-password' --skip-sync
+
+# Use environment variables (good for CI/automation)
+OBSIDIAN_EMAIL=you@example.com OBSIDIAN_PASSWORD='your-password' \
+  ./agent-setup.sh --vault-name my-vault
+
+# JSON output for programmatic consumption
+./agent-setup.sh --email you@example.com --password 'your-password' --json
+```
+
+### What `agent-setup.sh` does
+
+1. **Authenticates** with your Obsidian account (Catalyst license required)
+2. **Triggers the insider auto-updater** — Obsidian downloads the signed 1.12+ `.asar` via its own update mechanism
+3. **Stores the account token** in Obsidian's renderer localStorage
+4. **Creates or connects** a remote sync vault
+5. **Verifies** CLI and sync are working
+
+See [`docs/POST_INSTALL_GUIDE.md`](docs/POST_INSTALL_GUIDE.md) for the full technical breakdown of each step.
+
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `--email` | Obsidian account email |
+| `--password` | Obsidian account password |
+| `--vault-name` | Remote vault name (default: local vault dirname) |
+| `--vault-path` | Local vault path (default: `$OBSIDIAN_VAULT`) |
+| `--region` | Sync region (default: auto-detected) |
+| `--connect-existing` | Connect to existing vault instead of creating |
+| `--skip-insider` | Skip insider upgrade |
+| `--skip-sync` | Skip sync setup |
+| `--timeout` | Max wait for insider download (default: 60s) |
+| `--json` | Output results as JSON |
+
 ## Prerequisites
 
 - **Linux x86_64** (Ubuntu 22.04+ recommended)
-- **Obsidian Catalyst license** — the CLI requires the insider `.asar` file (1.12+)
+- **Obsidian Catalyst license** — the CLI requires the insider build (1.12+)
 - **sudo access** — for apt packages and systemd services
 - **Node.js 18+** — for the HTTP API server (installed automatically)
 
-### Getting the .asar file
+### Getting the .asar file (manual alternative)
 
-The `.asar` file is the Obsidian insider build that enables CLI functionality. If you have Obsidian Catalyst on macOS:
+`agent-setup.sh` handles this automatically via Obsidian's signed auto-updater. If you prefer to copy the `.asar` manually:
 
-```
-~/Library/Application Support/obsidian/obsidian-1.12.1.asar
-```
-
-On Linux:
-
-```
-~/.config/obsidian/obsidian-1.12.1.asar
-```
+macOS: `~/Library/Application Support/obsidian/obsidian-1.12.x.asar`
+Linux: `~/.config/obsidian/obsidian-1.12.x.asar`
 
 ## Architecture
 
@@ -318,7 +369,8 @@ The repo includes an `AGENTS.md` file that provides quick-reference instructions
 
 ```
 agentic-obsidian/
-├── install.sh              # Generic Linux installer
+├── install.sh              # Generic Linux installer (base setup)
+├── agent-setup.sh          # One-shot: insider upgrade + auth + sync
 ├── exe-install.sh          # exe.dev one-click installer
 ├── api/
 │   ├── server.js           # HTTP API server (Node.js, zero deps)
@@ -329,6 +381,8 @@ agentic-obsidian/
 ├── cron/
 │   ├── heartbeat.sh        # 5-min heartbeat writer
 │   └── vault-backup.sh     # Daily backup with rotation
+├── docs/
+│   └── POST_INSTALL_GUIDE.md  # Technical deep-dive on insider + sync
 ├── integrations/
 │   ├── ssh-pipe.sh         # SSH helper functions
 │   └── slack-webhook.sh    # Slack notifications
