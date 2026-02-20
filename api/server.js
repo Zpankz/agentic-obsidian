@@ -76,35 +76,36 @@ function obsidianEval(code) {
 
 /**
  * Get the full graph state from Obsidian's metadata cache.
+ * Uses file-based transfer to handle large vaults (2500+ nodes).
  * Returns { nodes: [{path, frontmatter, out_links}], edges: [{from, to}] }
  */
+let _graphCache = null;
+let _graphCacheTime = 0;
+const GRAPH_CACHE_TTL = 30000; // 30 seconds
+
 function getGraphState() {
-  return obsidianEval(`
-    (async () => {
-      const cache = app.metadataCache;
-      const files = app.vault.getMarkdownFiles();
-      const nodes = [];
-      const edges = [];
-      for (const f of files) {
-        const meta = cache.getFileCache(f);
-        const fm = meta?.frontmatter || {};
-        const links = (meta?.links || []).map(l => {
-          const r = cache.getFirstLinkpathDest(l.link, f.path);
-          return r ? r.path : null;
-        }).filter(Boolean);
-        nodes.push({
-          path: f.path,
-          basename: f.basename,
-          fm: fm,
-          mtime: f.stat?.mtime || 0
-        });
-        for (const target of [...new Set(links)]) {
-          if (target !== f.path) edges.push({from: f.path, to: target});
-        }
-      }
-      return JSON.stringify({nodes, edges});
-    })()
-  `);
+  const now = Date.now();
+  if (_graphCache && (now - _graphCacheTime) < GRAPH_CACHE_TTL) {
+    return _graphCache;
+  }
+
+  const fs = require('fs');
+  const tmpFile = '/tmp/obsidian-graph-state.json';
+  
+  // Write graph state to temp file via eval (avoids stdout size limits)
+  obsidianEval(
+    `const fs = require("fs"); const cache = app.metadataCache; const files = app.vault.getMarkdownFiles(); const nodes = []; const edges = []; for (const f of files) { const meta = cache.getFileCache(f); const fm = meta && meta.frontmatter ? meta.frontmatter : {}; const links = (meta && meta.links ? meta.links : []).map(l => { const r = cache.getFirstLinkpathDest(l.link, f.path); return r ? r.path : null; }).filter(Boolean); nodes.push({ path: f.path, basename: f.basename, fm: fm, mtime: f.stat ? f.stat.mtime : 0 }); for (const target of [...new Set(links)]) { if (target !== f.path) edges.push({from: f.path, to: target}); } } fs.writeFileSync("${tmpFile}", JSON.stringify({nodes: nodes, edges: edges})); "wrote " + nodes.length + " nodes"`
+  );
+  
+  // Read from temp file
+  try {
+    const data = fs.readFileSync(tmpFile, 'utf-8');
+    _graphCache = JSON.parse(data);
+    _graphCacheTime = now;
+    return _graphCache;
+  } catch (err) {
+    throw new Error('Failed to read graph state from ' + tmpFile + ': ' + err.message);
+  }
 }
 
 /**
@@ -517,9 +518,27 @@ const routes = {
   },
 
   "GET /analytics/summary": () => {
-    const graph = getGraphState();
-    const { nodes, edges } = graph;
-    const knowledge = nodes.filter(n => ['knowledge', 'moc', 'layer', 'evidence'].includes(n.fm.node_type));
+    let nodes, edges;
+    // Try snapshot file first (pre-computed, reliable)
+    try {
+      const fs = require('fs');
+      const snapPath = '/home/exedev/agentic-obsidian/snapshots/gkg-latest.json';
+      if (fs.existsSync(snapPath)) {
+        const snap = JSON.parse(fs.readFileSync(snapPath, 'utf-8'));
+        nodes = snap.nodes || [];
+        edges = snap.edges || [];
+      }
+    } catch(e) { /* fall through */ }
+    // Fallback to live graph
+    if (!nodes) {
+      try {
+        const raw = getGraphState();
+        const graph = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        nodes = graph.nodes || [];
+        edges = graph.edges || [];
+      } catch(e) { return { error: 'No graph data available: ' + e.message }; }
+    }
+    const knowledge = nodes.filter(n => n.fm && ['knowledge', 'moc', 'layer', 'evidence'].includes(n.fm.node_type));
     const clusters = {};
     for (const n of knowledge) {
       const c = n.fm.cluster_id || 'unclustered';
@@ -533,8 +552,8 @@ const routes = {
       c.avg_confidence = Math.round(c.avg_confidence / c.count * 100) / 100;
       c.avg_priority = Math.round(c.avg_priority / c.count * 100) / 100;
     }
-    const orphans = nodes.filter(n => (n.fm.in_degree || 0) === 0 && n.fm.node_type !== 'system').map(n => n.path);
-    const deadends = nodes.filter(n => (n.fm.out_degree || 0) === 0 && n.fm.node_type !== 'system').map(n => n.path);
+    const orphans = nodes.filter(n => n.fm && (n.fm.in_degree || 0) === 0 && n.fm.node_type !== 'system').map(n => n.path);
+    const deadends = nodes.filter(n => n.fm && (n.fm.out_degree || 0) === 0 && n.fm.node_type !== 'system').map(n => n.path);
     const weakest = knowledge
       .filter(n => n.fm.priority_score)
       .sort((a, b) => {
