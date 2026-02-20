@@ -1,0 +1,58 @@
+# =============================================================================
+# Agent Model Routing Configuration
+# Maps specialist agents to optimal models via cli-proxy (localhost:8317)
+# Bead: bd-2ma.2
+# =============================================================================
+
+proxy:
+  host: "127.0.0.1"
+  port: 8317
+  api_key: "f87d2ef4bc70049c52c4a186c8ba98a528194056108aa3bc7d2084b9cebbb9bd"
+
+# Task types: planning, reasoning, coding, realtime, general
+# Each agent maps task_type → model alias (resolved by cli-proxy)
+
+agents:
+  infra-agent:
+    description: "Infrastructure & Proxy — fast turnaround"
+    default_model: "cl-sonnet-4-6"          # Claude Sonnet via Claude OAuth
+    task_routing:
+      coding:    "cl-sonnet-4-6"             # fast for code edits
+      planning:  "ag-sonnet-4-6"             # Antigravity Sonnet fallback
+      reasoning: "cl-sonnet-4-6"
+      general:   "ag-gemini-3-flash"         # cheapest for simple queries
+
+  graph-agent:
+    description: "Graph Analytics & Semantic Mapping — needs deep reasoning"
+    default_model: "cl-opus-4-6"             # Claude Opus via Claude OAuth
+    task_routing:
+      coding:    "cl-opus-4-6"               # complex graph code
+      planning:  "cl-opus-4-6"
+      reasoning: "cl-opus-4-6"               # heavy semantic analysis
+      general:   "ag-opus-4-6"               # Antigravity Opus fallback
+
+  ralph-agent:
+    description: "RALPH Loop & AoT — balanced planning + deep reasoning"
+    default_model: "cl-opus-4-6"
+    task_routing:
+      coding:    "cl-sonnet-4-6"             # Sonnet for routine code
+      planning:  "cl-sonnet-4-6"             # Sonnet for planning passes
+      reasoning: "cl-opus-4-6"               # Opus for AoT/System-2 reasoning
+      general:   "ag-sonnet-4-6"
+
+  voice-agent:
+    description: "Voice Interface — real-time low-latency"
+    default_model: "ag-gemini-3-flash"       # Gemini Flash for speed
+    task_routing:
+      realtime:  "ag-gemini-3-flash"         # lowest latency
+      coding:    "gc-gemini-2.5-flash"       # Gemini CLI Flash for code
+      planning:  "ag-sonnet-4-6"             # Sonnet when planning needed
+      reasoning: "gc-gemini-2.5-pro"         # Gemini Pro for deeper thought
+      general:   "ag-gemini-3-flash"
+
+# Fallback chain — if primary model is unavailable, try these in order
+fallback_chain:
+  - "ag-opus-4-6"
+  - "ag-sonnet-4-6"
+  - "gc-gemini-2.5-pro"
+  - "ag-gemini-3-flash"
